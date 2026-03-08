@@ -9,15 +9,15 @@ CHAT_ID = "1603606771"
 
 @app.route('/')
 def home():
-return "Bot Running!", 200
+    return "Bot Running!", 200
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-data = request.get_json(force=True)
-ticker = data.get('ticker', 'N/A')
-close = data.get('close', 'N/A')
-action = str(data.get('action', '')).upper()
-emoji = "🟢 LONG" if action == "BUY" else "🔴 SHORT"
-msg = "🚨 SIGNAL!\nPair: " + ticker + "\nSignal: " + emoji + "\nPrice: $" + str(close)
-requests.post("https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage", json={"chat_id": CHAT_ID, "text": msg})
-return "OK", 200
+    data = request.get_json(force=True)
+    ticker = data.get('ticker', 'N/A')
+    close = data.get('close', 'N/A')
+    action = str(data.get('action', '')).upper()
+    emoji = "🟢 LONG" if action == "BUY" else "🔴 SHORT"
+    msg = "🚨 SIGNAL!\nPair: " + ticker + "\nSignal: " + emoji + "\nPrice: $" + str(close)
+    requests.post("https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage", json={"chat_id": CHAT_ID, "text": msg})
+    return "OK", 200
