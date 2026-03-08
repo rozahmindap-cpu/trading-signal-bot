@@ -13,9 +13,46 @@ PAIRS = [
     "RESOLVE/USDT","MATRA/USDT","KATA/USDT","SUI/USDT","AVA/USDT"
 ]
 alerted = {}
+stats = {"win": 0, "loss": 0}
+exchange_global = None
 
 def send_tele(msg):
     requests.post("https://api.telegram.org/bot"+BOT_TOKEN+"/sendMessage", json={"chat_id":CHAT_ID,"text":msg,"parse_mode":"HTML"})
+
+def get_winrate():
+    total = stats["win"] + stats["loss"]
+    if total == 0:
+        return "N/A (baru mulai)"
+    pct = round(stats["win"] / total * 100, 1)
+    return str(pct)+"% ("+str(stats["win"])+"W/"+str(stats["loss"])+"L)"
+
+def monitor_signal(pair, action, entry, tp1, sl):
+    deadline = time.time() + 14400
+    while time.time() < deadline:
+        try:
+            time.sleep(60)
+            ticker = exchange_global.fetch_ticker(pair)
+            price = ticker["last"]
+            if action == "LONG":
+                if price >= tp1:
+                    stats["win"] += 1
+                    send_tele("✅ <b>TP HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+str(entry)+"\nTP1: $"+str(tp1)+"\n\n📊 Win Rate: "+get_winrate())
+                    return
+                elif price <= sl:
+                    stats["loss"] += 1
+                    send_tele("❌ <b>SL HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+str(entry)+"\nSL: $"+str(sl)+"\n\n📊 Win Rate: "+get_winrate())
+                    return
+            else:
+                if price <= tp1:
+                    stats["win"] += 1
+                    send_tele("✅ <b>TP HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+str(entry)+"\nTP1: $"+str(tp1)+"\n\n📊 Win Rate: "+get_winrate())
+                    return
+                elif price >= sl:
+                    stats["loss"] += 1
+                    send_tele("❌ <b>SL HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+str(entry)+"\nSL: $"+str(sl)+"\n\n📊 Win Rate: "+get_winrate())
+                    return
+        except:
+            pass
 
 def calc_tp_sl(price, action):
     if action == "LONG":
@@ -29,11 +66,12 @@ def calc_tp_sl(price, action):
     return tp1, tp2, sl
 
 def scan():
-    exchange = ccxt.binance({"options":{"defaultType":"future"}})
+    global exchange_global
+    exchange_global = ccxt.binance({"options":{"defaultType":"future"}})
     while True:
         for pair in PAIRS:
             try:
-                ohlcv = exchange.fetch_ohlcv(pair,"15m",limit=100)
+                ohlcv = exchange_global.fetch_ohlcv(pair,"15m",limit=100)
                 df = pd.DataFrame(ohlcv,columns=["t","o","h","l","c","v"])
                 df["ema20"] = EMAIndicator(df["c"],20).ema_indicator()
                 df["ema50"] = EMAIndicator(df["c"],50).ema_indicator()
@@ -44,8 +82,6 @@ def scan():
                 r,p = df.iloc[-1],df.iloc[-2]
                 price = round(r["c"],4)
                 rsi = round(r["rsi"],1)
-                ema20 = round(r["ema20"],4)
-                ema50 = round(r["ema50"],4)
                 now = time.time()
                 last = alerted.get(pair,{})
                 if r["ema20"]>r["ema50"] and 40<r["rsi"]<70 and r["macd"]>r["sig"] and p["macd"]<=p["sig"]:
@@ -67,8 +103,10 @@ def scan():
                                "• MACD crossover bullish ✅\n"
                                "• RSI: "+str(rsi)+" → Momentum naik ✅\n"
                                "━━━━━━━━━━━━━━\n"
+                               "📊 Win Rate: "+get_winrate()+"\n"
                                "⏰ TF: 15m | Binance Futures")
                         send_tele(msg)
+                        threading.Thread(target=monitor_signal,args=(pair,"LONG",price,tp1,sl),daemon=True).start()
                 elif r["ema20"]<r["ema50"] and 30<r["rsi"]<60 and r["macd"]<r["sig"] and p["macd"]>=p["sig"]:
                     if last.get("dir") != "SELL" or now - last.get("t",0) > 14400:
                         alerted[pair]={"dir":"SELL","t":now}
@@ -88,8 +126,10 @@ def scan():
                                "• MACD crossover bearish ✅\n"
                                "• RSI: "+str(rsi)+" → Momentum turun ✅\n"
                                "━━━━━━━━━━━━━━\n"
+                               "📊 Win Rate: "+get_winrate()+"\n"
                                "⏰ TF: 15m | Binance Futures")
                         send_tele(msg)
+                        threading.Thread(target=monitor_signal,args=(pair,"SHORT",price,tp1,sl),daemon=True).start()
                 else:
                     alerted[pair]={}
             except Exception as e:
@@ -100,7 +140,9 @@ threading.Thread(target=scan,daemon=True).start()
 
 @app.route("/")
 def home():
-    return "Bot Running!", 200
+    total = stats["win"] + stats["loss"]
+    wr = get_winrate()
+    return "Bot Running! | Signals tracked: "+str(total)+" | Win Rate: "+wr, 200
 
 @app.route("/webhook",methods=["POST"])
 def webhook():
