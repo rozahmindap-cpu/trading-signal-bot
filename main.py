@@ -15,7 +15,7 @@ PAIRS = [
 alerted = {}
 
 def send_tele(msg):
-    requests.post("https://api.telegram.org/bot"+BOT_TOKEN+"/sendMessage", json={"chat_id":CHAT_ID,"text":msg})
+    requests.post("https://api.telegram.org/bot"+BOT_TOKEN+"/sendMessage", json={"chat_id":CHAT_ID,"text":msg,"parse_mode":"HTML"})
 
 def calc_tp_sl(price, action):
     if action == "LONG":
@@ -44,40 +44,54 @@ def scan():
                 r,p = df.iloc[-1],df.iloc[-2]
                 price = round(r["c"],4)
                 rsi = round(r["rsi"],1)
+                ema20 = round(r["ema20"],4)
+                ema50 = round(r["ema50"],4)
+                now = time.time()
+                last = alerted.get(pair,{})
                 if r["ema20"]>r["ema50"] and 40<r["rsi"]<70 and r["macd"]>r["sig"] and p["macd"]<=p["sig"]:
-                    if alerted.get(pair) != "BUY":
-                        alerted[pair]="BUY"
+                    if last.get("dir") != "BUY" or now - last.get("t",0) > 14400:
+                        alerted[pair]={"dir":"BUY","t":now}
                         tp1,tp2,sl = calc_tp_sl(price,"LONG")
-                        msg = ("🚨 SIGNAL!\n"
+                        msg = ("🚨 <b>SIGNAL ALERT!</b>\n"
                                "━━━━━━━━━━━━━━\n"
-                               "Pair: "+pair+"\n"
-                               "Signal: 🟢 LONG\n"
+                               "📌 Pair: <b>"+pair+"</b>\n"
+                               "📊 Signal: 🟢 <b>LONG</b>\n"
                                "━━━━━━━━━━━━━━\n"
-                               "📈 Entry: $"+str(price)+"\n"
+                               "📈 Entry: <b>$"+str(price)+"</b>\n"
                                "🎯 TP1: $"+str(tp1)+" (+2%)\n"
                                "🎯 TP2: $"+str(tp2)+" (+4%)\n"
                                "🛑 SL: $"+str(sl)+" (-1%)\n"
                                "━━━━━━━━━━━━━━\n"
-                               "RSI: "+str(rsi)+" | TF: 15m")
+                               "🔍 <b>Analisis:</b>\n"
+                               "• EMA20 &gt; EMA50 → Uptrend ✅\n"
+                               "• MACD crossover bullish ✅\n"
+                               "• RSI: "+str(rsi)+" → Momentum naik ✅\n"
+                               "━━━━━━━━━━━━━━\n"
+                               "⏰ TF: 15m | Binance Futures")
                         send_tele(msg)
                 elif r["ema20"]<r["ema50"] and 30<r["rsi"]<60 and r["macd"]<r["sig"] and p["macd"]>=p["sig"]:
-                    if alerted.get(pair) != "SELL":
-                        alerted[pair]="SELL"
+                    if last.get("dir") != "SELL" or now - last.get("t",0) > 14400:
+                        alerted[pair]={"dir":"SELL","t":now}
                         tp1,tp2,sl = calc_tp_sl(price,"SHORT")
-                        msg = ("🚨 SIGNAL!\n"
+                        msg = ("🚨 <b>SIGNAL ALERT!</b>\n"
                                "━━━━━━━━━━━━━━\n"
-                               "Pair: "+pair+"\n"
-                               "Signal: 🔴 SHORT\n"
+                               "📌 Pair: <b>"+pair+"</b>\n"
+                               "📊 Signal: 🔴 <b>SHORT</b>\n"
                                "━━━━━━━━━━━━━━\n"
-                               "📉 Entry: $"+str(price)+"\n"
+                               "📉 Entry: <b>$"+str(price)+"</b>\n"
                                "🎯 TP1: $"+str(tp1)+" (-2%)\n"
                                "🎯 TP2: $"+str(tp2)+" (-4%)\n"
                                "🛑 SL: $"+str(sl)+" (+1%)\n"
                                "━━━━━━━━━━━━━━\n"
-                               "RSI: "+str(rsi)+" | TF: 15m")
+                               "🔍 <b>Analisis:</b>\n"
+                               "• EMA20 &lt; EMA50 → Downtrend ✅\n"
+                               "• MACD crossover bearish ✅\n"
+                               "• RSI: "+str(rsi)+" → Momentum turun ✅\n"
+                               "━━━━━━━━━━━━━━\n"
+                               "⏰ TF: 15m | Binance Futures")
                         send_tele(msg)
                 else:
-                    alerted[pair]=None
+                    alerted[pair]={}
             except Exception as e:
                 print(str(e))
         time.sleep(60)
