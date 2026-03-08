@@ -7,8 +7,6 @@ app = Flask(__name__)
 
 BOT_TOKEN = "8530174420:AAFTtuN2CjuA4PQd75fnD6jZKmOKOeq93m4"
 CHAT_ID = "1603606771"
-API_KEY = os.environ.get("BINANCE_API_KEY", "")
-SECRET = os.environ.get("BINANCE_SECRET", "")
 PAIRS = ["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT"]
 alerted = {}
 
@@ -16,7 +14,7 @@ def send_tele(msg):
     requests.post("https://api.telegram.org/bot"+BOT_TOKEN+"/sendMessage", json={"chat_id":CHAT_ID,"text":msg})
 
 def scan():
-    exchange = ccxt.binance({"apiKey":API_KEY,"secret":SECRET})
+    exchange = ccxt.bybit({"options":{"defaultType":"linear"}})
     while True:
         for pair in PAIRS:
             try:
