@@ -12,7 +12,8 @@ PAIRS = [
     "BANANA/USDT","SUI/USDT","AVA/USDT"
 ]
 alerted = {}
-stats = {"win": 0, "loss": 0}
+stats = {"win": 0, "loss": 0, "signals": 0}
+active_signals = {}
 exchange_global = None
 
 def fmt(price):
@@ -47,6 +48,7 @@ def monitor_signal(pair, action, entry, tp1, tp2, sl):
                 elif tp1_hit and price >= tp2:
                     stats["win"] += 1
                     send_tele("💰 <b>TP2 HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nTP2: $"+fmt(tp2)+"\n\n📊 Win Rate: "+get_winrate())
+                    active_signals.pop(pair, None)
                     return
                 elif price <= sl:
                     if tp1_hit:
@@ -54,6 +56,7 @@ def monitor_signal(pair, action, entry, tp1, tp2, sl):
                     else:
                         stats["loss"] += 1
                         send_tele("❌ <b>SL HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\n📊 Win Rate: "+get_winrate())
+                    active_signals.pop(pair, None)
                     return
             else:
                 if not tp1_hit and price <= tp1:
@@ -89,6 +92,8 @@ def scan():
     exchange_global = ccxt.binance({"options":{"defaultType":"future"}})
     while True:
         for pair in PAIRS:
+            if pair in active_signals:
+                continue
             try:
                 ohlcv = exchange_global.fetch_ohlcv(pair,"15m",limit=150)
                 df = pd.DataFrame(ohlcv,columns=["t","o","h","l","c","v"])
@@ -140,7 +145,9 @@ def scan():
                                "📊 Win Rate: "+get_winrate()+"\n"
                                "⏰ TF: 15m | Binance Futures")
                         send_tele(msg)
-                        threading.Thread(target=monitor_signal,args=(pair,"LONG",price,tp1,tp2,sl),daemon=True).start()
+                        active_signals[pair] = 'LONG'
+                    stats['signals'] += 1
+                    threading.Thread(target=monitor_signal,args=(pair,'LONG',price,tp1,tp2,sl),daemon=True).start()
                 elif short_ema and short_stoch and short_rsi:
                     if last.get("dir") != "SELL" or now - last.get("t",0) > 14400:
                         alerted[pair]={"dir":"SELL","t":now}
@@ -163,7 +170,9 @@ def scan():
                                "📊 Win Rate: "+get_winrate()+"\n"
                                "⏰ TF: 15m | Binance Futures")
                         send_tele(msg)
-                        threading.Thread(target=monitor_signal,args=(pair,"SHORT",price,tp1,tp2,sl),daemon=True).start()
+                        active_signals[pair] = 'SHORT'
+                    stats['signals'] += 1
+                    threading.Thread(target=monitor_signal,args=(pair,'SHORT',price,tp1,tp2,sl),daemon=True).start()
                 else:
                     alerted[pair]={}
             except Exception as e:
