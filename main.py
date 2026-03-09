@@ -1,7 +1,7 @@
 from flask import Flask, request
 import requests, os, threading, time, ccxt, pandas as pd
 from ta.trend import EMAIndicator, MACD
-from ta.momentum import RSIIndicator
+from ta.momentum import RSIIndicator, StochasticOscillator
 
 app = Flask(__name__)
 
@@ -61,7 +61,7 @@ def calc_tp_sl(price, action):
     else:
         tp1 = round(price * 0.98, 4)
         tp2 = round(price * 0.96, 4)
-        sl = round(price * 1.01, 4)
+        sl = round(price * 1.015, 4)
     return tp1, tp2, sl
 
 def scan():
@@ -70,20 +70,35 @@ def scan():
     while True:
         for pair in PAIRS:
             try:
-                ohlcv = exchange_global.fetch_ohlcv(pair,"15m",limit=100)
+                ohlcv = exchange_global.fetch_ohlcv(pair,"15m",limit=150)
                 df = pd.DataFrame(ohlcv,columns=["t","o","h","l","c","v"])
-                df["ema20"] = EMAIndicator(df["c"],20).ema_indicator()
-                df["ema50"] = EMAIndicator(df["c"],50).ema_indicator()
+                df["ema25"] = EMAIndicator(df["c"],25).ema_indicator()
+                df["ema75"] = EMAIndicator(df["c"],75).ema_indicator()
+                df["ema140"] = EMAIndicator(df["c"],140).ema_indicator()
                 df["rsi"] = RSIIndicator(df["c"],14).rsi()
                 macd = MACD(df["c"])
                 df["macd"] = macd.macd()
                 df["sig"] = macd.macd_signal()
-                r,p = df.iloc[-1],df.iloc[-2]
+                stoch = StochasticOscillator(df["h"],df["l"],df["c"],window=14,smooth_window=3)
+                df["stoch_k"] = stoch.stoch()
+                df["stoch_d"] = stoch.stoch_signal()
+                r = df.iloc[-1]
+                p = df.iloc[-2]
                 price = round(r["c"],4)
                 rsi = round(r["rsi"],1)
+                stoch_val = round(r["stoch_k"],1)
                 now = time.time()
                 last = alerted.get(pair,{})
-                if r["ema20"]>r["ema50"] and 40<r["rsi"]<70 and r["macd"]>r["sig"] and p["macd"]<=p["sig"]:
+
+                long_ema = r["ema25"] > r["ema75"] > r["ema140"]
+                long_stoch = r["stoch_k"] < 30 and r["stoch_k"] > r["stoch_d"] and p["stoch_k"] <= p["stoch_d"]
+                long_rsi = 30 < r["rsi"] < 60
+
+                short_ema = r["ema25"] < r["ema75"] < r["ema140"]
+                short_stoch = r["stoch_k"] > 70 and r["stoch_k"] < r["stoch_d"] and p["stoch_k"] >= p["stoch_d"]
+                short_rsi = r["rsi"] > 55 and p["rsi"] > r["rsi"]
+
+                if long_ema and long_stoch and long_rsi:
                     if last.get("dir") != "BUY" or now - last.get("t",0) > 14400:
                         alerted[pair]={"dir":"BUY","t":now}
                         tp1,tp2,sl = calc_tp_sl(price,"LONG")
@@ -98,15 +113,15 @@ def scan():
                                "🛑 SL: $"+str(sl)+" (-1%)\n"
                                "━━━━━━━━━━━━━━\n"
                                "🔍 <b>Analisis:</b>\n"
-                               "• EMA20 &gt; EMA50 → Uptrend ✅\n"
-                               "• MACD crossover bullish ✅\n"
-                               "• RSI: "+str(rsi)+" → Momentum naik ✅\n"
+                               "• EMA25 > EMA75 > EMA140 → Uptrend ✅\n"
+                               "• Stochastic oversold crossup ✅\n"
+                               "• RSI: "+str(rsi)+" | Stoch: "+str(stoch_val)+" ✅\n"
                                "━━━━━━━━━━━━━━\n"
                                "📊 Win Rate: "+get_winrate()+"\n"
                                "⏰ TF: 15m | Binance Futures")
                         send_tele(msg)
                         threading.Thread(target=monitor_signal,args=(pair,"LONG",price,tp1,sl),daemon=True).start()
-                elif r["ema20"]<r["ema50"] and 30<r["rsi"]<60 and r["macd"]<r["sig"] and p["macd"]>=p["sig"]:
+                elif short_ema and short_stoch and short_rsi:
                     if last.get("dir") != "SELL" or now - last.get("t",0) > 14400:
                         alerted[pair]={"dir":"SELL","t":now}
                         tp1,tp2,sl = calc_tp_sl(price,"SHORT")
@@ -118,12 +133,12 @@ def scan():
                                "📉 Entry: <b>$"+str(price)+"</b>\n"
                                "🎯 TP1: $"+str(tp1)+" (-2%)\n"
                                "🎯 TP2: $"+str(tp2)+" (-4%)\n"
-                               "🛑 SL: $"+str(sl)+" (+1%)\n"
+                               "🛑 SL: $"+str(sl)+" (+1.5%)\n"
                                "━━━━━━━━━━━━━━\n"
                                "🔍 <b>Analisis:</b>\n"
-                               "• EMA20 &lt; EMA50 → Downtrend ✅\n"
-                               "• MACD crossover bearish ✅\n"
-                               "• RSI: "+str(rsi)+" → Momentum turun ✅\n"
+                               "• EMA25 < EMA75 < EMA140 → Downtrend ✅\n"
+                               "• Stochastic overbought crossdown ✅\n"
+                               "• RSI: "+str(rsi)+" | Stoch: "+str(stoch_val)+" ✅\n"
                                "━━━━━━━━━━━━━━\n"
                                "📊 Win Rate: "+get_winrate()+"\n"
                                "⏰ TF: 15m | Binance Futures")
