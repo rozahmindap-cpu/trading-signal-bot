@@ -7,10 +7,7 @@ app = Flask(__name__)
 
 BOT_TOKEN = "8530174420:AAFTtuN2CjuA4PQd75fnD6jZKmOKOeq93m4"
 CHAT_ID = "1603606771"
-PAIRS = [
-    "BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT",
-    "BANANA/USDT","SUI/USDT","AVA/USDT"
-]
+PAIRS = ["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT","SUI/USDT","AVA/USDT","DOGE/USDT","HYPE/USDT","BCH/USDT","SHIB/USDT","ASTR/USDT"]
 alerted = {}
 stats = {"win": 0, "loss": 0, "signals": 0}
 active_signals = {}
