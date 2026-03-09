@@ -1,5 +1,5 @@
 from flask import Flask, request
-import requests, os, threading, time, ccxt, pandas as pd
+import requests, os, threading, time, ccxt, pandas as pd, math
 from ta.trend import EMAIndicator, MACD
 from ta.momentum import RSIIndicator, StochasticOscillator
 
@@ -14,6 +14,13 @@ PAIRS = [
 alerted = {}
 stats = {"win": 0, "loss": 0}
 exchange_global = None
+
+def fmt(price):
+    if price == 0:
+        return "0"
+    d = math.floor(math.log10(abs(price)))
+    decimals = max(2, 4 - d)
+    return str(round(price, decimals))
 
 def send_tele(msg):
     requests.post("https://api.telegram.org/bot"+BOT_TOKEN+"/sendMessage", json={"chat_id":CHAT_ID,"text":msg,"parse_mode":"HTML"})
@@ -35,33 +42,33 @@ def monitor_signal(pair, action, entry, tp1, sl):
             if action == "LONG":
                 if price >= tp1:
                     stats["win"] += 1
-                    send_tele("✅ <b>TP HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+str(entry)+"\nTP1: $"+str(tp1)+"\n\n📊 Win Rate: "+get_winrate())
+                    send_tele("✅ <b>TP HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nTP1: $"+fmt(tp1)+"\n\n📊 Win Rate: "+get_winrate())
                     return
                 elif price <= sl:
                     stats["loss"] += 1
-                    send_tele("❌ <b>SL HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+str(entry)+"\nSL: $"+str(sl)+"\n\n📊 Win Rate: "+get_winrate())
+                    send_tele("❌ <b>SL HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\n📊 Win Rate: "+get_winrate())
                     return
             else:
                 if price <= tp1:
                     stats["win"] += 1
-                    send_tele("✅ <b>TP HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+str(entry)+"\nTP1: $"+str(tp1)+"\n\n📊 Win Rate: "+get_winrate())
+                    send_tele("✅ <b>TP HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nTP1: $"+fmt(tp1)+"\n\n📊 Win Rate: "+get_winrate())
                     return
                 elif price >= sl:
                     stats["loss"] += 1
-                    send_tele("❌ <b>SL HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+str(entry)+"\nSL: $"+str(sl)+"\n\n📊 Win Rate: "+get_winrate())
+                    send_tele("❌ <b>SL HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\n📊 Win Rate: "+get_winrate())
                     return
         except:
             pass
 
 def calc_tp_sl(price, action):
     if action == "LONG":
-        tp1 = round(price * 1.02, 4)
-        tp2 = round(price * 1.04, 4)
-        sl = round(price * 0.99, 4)
+        tp1 = price * 1.02
+        tp2 = price * 1.04
+        sl = price * 0.99
     else:
-        tp1 = round(price * 0.98, 4)
-        tp2 = round(price * 0.96, 4)
-        sl = round(price * 1.015, 4)
+        tp1 = price * 0.98
+        tp2 = price * 0.96
+        sl = price * 1.015
     return tp1, tp2, sl
 
 def scan():
@@ -84,7 +91,7 @@ def scan():
                 df["stoch_d"] = stoch.stoch_signal()
                 r = df.iloc[-1]
                 p = df.iloc[-2]
-                price = round(r["c"],4)
+                price = r["c"]
                 rsi = round(r["rsi"],1)
                 stoch_val = round(r["stoch_k"],1)
                 now = time.time()
@@ -107,10 +114,10 @@ def scan():
                                "📌 Pair: <b>"+pair+"</b>\n"
                                "📊 Signal: 🟢 <b>LONG</b>\n"
                                "━━━━━━━━━━━━━━\n"
-                               "📈 Entry: <b>$"+str(price)+"</b>\n"
-                               "🎯 TP1: $"+str(tp1)+" (+2%)\n"
-                               "🎯 TP2: $"+str(tp2)+" (+4%)\n"
-                               "🛑 SL: $"+str(sl)+" (-1%)\n"
+                               "📈 Entry: <b>$"+fmt(price)+"</b>\n"
+                               "🎯 TP1: $"+fmt(tp1)+" (+2%)\n"
+                               "🎯 TP2: $"+fmt(tp2)+" (+4%)\n"
+                               "🛑 SL: $"+fmt(sl)+" (-1%)\n"
                                "━━━━━━━━━━━━━━\n"
                                "🔍 <b>Analisis:</b>\n"
                                "• EMA25 > EMA75 > EMA140 → Uptrend ✅\n"
@@ -130,10 +137,10 @@ def scan():
                                "📌 Pair: <b>"+pair+"</b>\n"
                                "📊 Signal: 🔴 <b>SHORT</b>\n"
                                "━━━━━━━━━━━━━━\n"
-                               "📉 Entry: <b>$"+str(price)+"</b>\n"
-                               "🎯 TP1: $"+str(tp1)+" (-2%)\n"
-                               "🎯 TP2: $"+str(tp2)+" (-4%)\n"
-                               "🛑 SL: $"+str(sl)+" (+1.5%)\n"
+                               "📉 Entry: <b>$"+fmt(price)+"</b>\n"
+                               "🎯 TP1: $"+fmt(tp1)+" (-2%)\n"
+                               "🎯 TP2: $"+fmt(tp2)+" (-4%)\n"
+                               "🛑 SL: $"+fmt(sl)+" (+1.5%)\n"
                                "━━━━━━━━━━━━━━\n"
                                "🔍 <b>Analisis:</b>\n"
                                "• EMA25 < EMA75 < EMA140 → Downtrend ✅\n"
