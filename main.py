@@ -1,6 +1,6 @@
 from flask import Flask, request
-import requests, os, threading, time, ccxt, pandas as pd, math
-from ta.trend import EMAIndicator, MACD
+import requests, threading, time, ccxt, pandas as pd, math
+from ta.trend import EMAIndicator
 from ta.momentum import RSIIndicator, StochasticOscillator
 
 app = Flask(__name__)
@@ -30,6 +30,20 @@ def get_winrate():
     pct = round(stats["win"] / total * 100, 1)
     return str(pct)+"% ("+str(stats["win"])+"W/"+str(stats["loss"])+"L)"
 
+def get_1h_trend(pair):
+    try:
+        ohlcv = exchange_global.fetch_ohlcv(pair, "1h", limit=50)
+        df = pd.DataFrame(ohlcv, columns=["t","o","h","l","c","v"])
+        ema25 = EMAIndicator(df["c"], 25).ema_indicator()
+        ema75 = EMAIndicator(df["c"], 75).ema_indicator()
+        if ema25.iloc[-1] > ema75.iloc[-1]:
+            return "BULL"
+        elif ema25.iloc[-1] < ema75.iloc[-1]:
+            return "BEAR"
+        return "NEUTRAL"
+    except:
+        return "NEUTRAL"
+
 def monitor_signal(pair, action, entry, tp1, tp2, sl):
     deadline = time.time() + 14400
     tp1_hit = False
@@ -49,7 +63,7 @@ def monitor_signal(pair, action, entry, tp1, tp2, sl):
                     return
                 elif price <= sl:
                     if tp1_hit:
-                        send_tele("⚠️ <b>SL HIT after TP1</b>\nPair: "+pair+"\nSignal: LONG\nPartial win — exited at TP1 level\n\n📊 Win Rate: "+get_winrate())
+                        send_tele("⚠️ <b>SL HIT after TP1</b>\nPair: "+pair+"\nPartial win\n\n📊 Win Rate: "+get_winrate())
                     else:
                         stats["loss"] += 1
                         send_tele("❌ <b>SL HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\n📊 Win Rate: "+get_winrate())
@@ -62,13 +76,15 @@ def monitor_signal(pair, action, entry, tp1, tp2, sl):
                 elif tp1_hit and price <= tp2:
                     stats["win"] += 1
                     send_tele("💰 <b>TP2 HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nTP2: $"+fmt(tp2)+"\n\n📊 Win Rate: "+get_winrate())
+                    active_signals.pop(pair, None)
                     return
                 elif price >= sl:
                     if tp1_hit:
-                        send_tele("⚠️ <b>SL HIT after TP1</b>\nPair: "+pair+"\nSignal: SHORT\nPartial win — exited at TP1 level\n\n📊 Win Rate: "+get_winrate())
+                        send_tele("⚠️ <b>SL HIT after TP1</b>\nPair: "+pair+"\nPartial win\n\n📊 Win Rate: "+get_winrate())
                     else:
                         stats["loss"] += 1
                         send_tele("❌ <b>SL HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\n📊 Win Rate: "+get_winrate())
+                    active_signals.pop(pair, None)
                     return
         except:
             pass
@@ -98,9 +114,6 @@ def scan():
                 df["ema75"] = EMAIndicator(df["c"],75).ema_indicator()
                 df["ema140"] = EMAIndicator(df["c"],140).ema_indicator()
                 df["rsi"] = RSIIndicator(df["c"],14).rsi()
-                macd = MACD(df["c"])
-                df["macd"] = macd.macd()
-                df["sig"] = macd.macd_signal()
                 stoch = StochasticOscillator(df["h"],df["l"],df["c"],window=14,smooth_window=3)
                 df["stoch_k"] = stoch.stoch()
                 df["stoch_d"] = stoch.stoch_signal()
@@ -112,6 +125,8 @@ def scan():
                 now = time.time()
                 last = alerted.get(pair,{})
 
+                trend_1h = get_1h_trend(pair)
+
                 long_ema = r["ema25"] > r["ema75"] > r["ema140"]
                 long_stoch = r["stoch_k"] < 30 and r["stoch_k"] > r["stoch_d"] and p["stoch_k"] <= p["stoch_d"]
                 long_rsi = 30 < r["rsi"] < 60
@@ -120,7 +135,7 @@ def scan():
                 short_stoch = r["stoch_k"] > 70 and r["stoch_k"] < r["stoch_d"] and p["stoch_k"] >= p["stoch_d"]
                 short_rsi = r["rsi"] > 55 and p["rsi"] > r["rsi"]
 
-                if long_ema and long_stoch and long_rsi:
+                if long_ema and long_stoch and long_rsi and trend_1h == "BULL":
                     if last.get("dir") != "BUY" or now - last.get("t",0) > 14400:
                         alerted[pair]={"dir":"BUY","t":now}
                         tp1,tp2,sl = calc_tp_sl(price,"LONG")
@@ -140,12 +155,13 @@ def scan():
                                "• EMA25 > EMA75 > EMA140 → Uptrend ✅\n"
                                "• Stochastic oversold crossup ✅\n"
                                "• RSI: "+str(rsi)+" | Stoch: "+str(stoch_val)+" ✅\n"
+                               "• 1H Trend: Bullish ✅\n"
                                "━━━━━━━━━━━━━━\n"
                                "📊 Win Rate: "+get_winrate()+"\n"
                                "⏰ TF: 15m | Binance Futures")
                         send_tele(msg)
                         threading.Thread(target=monitor_signal,args=(pair,'LONG',price,tp1,tp2,sl),daemon=True).start()
-                elif short_ema and short_stoch and short_rsi:
+                elif short_ema and short_stoch and short_rsi and trend_1h == "BEAR":
                     if last.get("dir") != "SELL" or now - last.get("t",0) > 14400:
                         alerted[pair]={"dir":"SELL","t":now}
                         tp1,tp2,sl = calc_tp_sl(price,"SHORT")
@@ -165,6 +181,7 @@ def scan():
                                "• EMA25 < EMA75 < EMA140 → Downtrend ✅\n"
                                "• Stochastic overbought crossdown ✅\n"
                                "• RSI: "+str(rsi)+" | Stoch: "+str(stoch_val)+" ✅\n"
+                               "• 1H Trend: Bearish ✅\n"
                                "━━━━━━━━━━━━━━\n"
                                "📊 Win Rate: "+get_winrate()+"\n"
                                "⏰ TF: 15m | Binance Futures")
