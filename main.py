@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 BOT_TOKEN = "8530174420:AAFTtuN2CjuA4PQd75fnD6jZKmOKOeq93m4"
 CHAT_ID = "1603606771"
-PAIRS = ["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT","SUI/USDT","AVA/USDT","DOGE/USDT","HYPE/USDT","BCH/USDT","SHIB/USDT","ASTR/USDT"]
+PAIRS = ["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT","SUI/USDT","AVA/USDT","DOGE/USDT","HYPE/USDT","BCH/USDT","ASTER/USDT"]
 alerted = {}
 stats = {"win": 0, "loss": 0, "signals": 0}
 active_signals = {}
@@ -124,6 +124,8 @@ def scan():
                     if last.get("dir") != "BUY" or now - last.get("t",0) > 14400:
                         alerted[pair]={"dir":"BUY","t":now}
                         tp1,tp2,sl = calc_tp_sl(price,"LONG")
+                        active_signals[pair] = 'LONG'
+                        stats['signals'] += 1
                         msg = ("🚨 <b>SIGNAL ALERT!</b>\n"
                                "━━━━━━━━━━━━━━\n"
                                "📌 Pair: <b>"+pair+"</b>\n"
@@ -142,13 +144,13 @@ def scan():
                                "📊 Win Rate: "+get_winrate()+"\n"
                                "⏰ TF: 15m | Binance Futures")
                         send_tele(msg)
-                        active_signals[pair] = 'LONG'
-                    stats['signals'] += 1
-                    threading.Thread(target=monitor_signal,args=(pair,'LONG',price,tp1,tp2,sl),daemon=True).start()
+                        threading.Thread(target=monitor_signal,args=(pair,'LONG',price,tp1,tp2,sl),daemon=True).start()
                 elif short_ema and short_stoch and short_rsi:
                     if last.get("dir") != "SELL" or now - last.get("t",0) > 14400:
                         alerted[pair]={"dir":"SELL","t":now}
                         tp1,tp2,sl = calc_tp_sl(price,"SHORT")
+                        active_signals[pair] = 'SHORT'
+                        stats['signals'] += 1
                         msg = ("🚨 <b>SIGNAL ALERT!</b>\n"
                                "━━━━━━━━━━━━━━\n"
                                "📌 Pair: <b>"+pair+"</b>\n"
@@ -167,9 +169,7 @@ def scan():
                                "📊 Win Rate: "+get_winrate()+"\n"
                                "⏰ TF: 15m | Binance Futures")
                         send_tele(msg)
-                        active_signals[pair] = 'SHORT'
-                    stats['signals'] += 1
-                    threading.Thread(target=monitor_signal,args=(pair,'SHORT',price,tp1,tp2,sl),daemon=True).start()
+                        threading.Thread(target=monitor_signal,args=(pair,'SHORT',price,tp1,tp2,sl),daemon=True).start()
                 else:
                     alerted[pair]={}
             except Exception as e:
