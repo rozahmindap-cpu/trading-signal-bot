@@ -1,6 +1,6 @@
 from flask import Flask, request
-import requests, threading, time, ccxt, pandas as pd, math
-from ta.trend import EMAIndicator
+import requests, os, threading, time, ccxt, pandas as pd, math
+from ta.trend import EMAIndicator, MACD
 from ta.momentum import RSIIndicator, StochasticOscillator
 
 app = Flask(__name__)
@@ -63,7 +63,7 @@ def monitor_signal(pair, action, entry, tp1, tp2, sl):
                     return
                 elif price <= sl:
                     if tp1_hit:
-                        send_tele("⚠️ <b>SL HIT after TP1</b>\nPair: "+pair+"\nPartial win\n\n📊 Win Rate: "+get_winrate())
+                        send_tele("⚠️ <b>SL HIT after TP1</b>\nPair: "+pair+"\nSignal: LONG\nPartial win\n\n📊 Win Rate: "+get_winrate())
                     else:
                         stats["loss"] += 1
                         send_tele("❌ <b>SL HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\n📊 Win Rate: "+get_winrate())
@@ -80,7 +80,7 @@ def monitor_signal(pair, action, entry, tp1, tp2, sl):
                     return
                 elif price >= sl:
                     if tp1_hit:
-                        send_tele("⚠️ <b>SL HIT after TP1</b>\nPair: "+pair+"\nPartial win\n\n📊 Win Rate: "+get_winrate())
+                        send_tele("⚠️ <b>SL HIT after TP1</b>\nPair: "+pair+"\nSignal: SHORT\nPartial win\n\n📊 Win Rate: "+get_winrate())
                     else:
                         stats["loss"] += 1
                         send_tele("❌ <b>SL HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\n📊 Win Rate: "+get_winrate())
