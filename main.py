@@ -94,7 +94,7 @@ def scan():
             if pair in active_signals:
                 continue
             try:
-                ohlcv = exchange_global.fetch_ohlcv(pair,"15m",limit=150)
+                ohlcv = exchange_global.fetch_ohlcv(pair,"30m",limit=150)
                 df = pd.DataFrame(ohlcv,columns=["t","o","h","l","c","v"])
                 df["ema25"] = EMAIndicator(df["c"],25).ema_indicator()
                 df["ema75"] = EMAIndicator(df["c"],75).ema_indicator()
@@ -141,7 +141,7 @@ def scan():
                                "• RSI: "+str(rsi)+" | Stoch: "+str(stoch_val)+" ✅\n"
                                "━━━━━━━━━━━━━━\n"
                                "📊 Win Rate: "+get_winrate()+"\n"
-                               "⏰ TF: 15m | Binance Futures")
+                               "⏰ TF: 30m | Binance Futures")
                         send_tele(msg)
                         threading.Thread(target=monitor_signal,args=(pair,"LONG",price,tp1,tp2,sl),daemon=True).start()
                 elif short_ema and short_stoch and short_rsi:
@@ -166,7 +166,7 @@ def scan():
                                "• RSI: "+str(rsi)+" | Stoch: "+str(stoch_val)+" ✅\n"
                                "━━━━━━━━━━━━━━\n"
                                "📊 Win Rate: "+get_winrate()+"\n"
-                               "⏰ TF: 15m | Binance Futures")
+                               "⏰ TF: 30m | Binance Futures")
                         send_tele(msg)
                         threading.Thread(target=monitor_signal,args=(pair,"SHORT",price,tp1,tp2,sl),daemon=True).start()
                 else:
