@@ -1,6 +1,6 @@
 from flask import Flask, request
 import requests, os, threading, time, ccxt, pandas as pd, math
-from ta.trend import EMAIndicator, MACD
+from ta.trend import EMAIndicator
 from ta.momentum import RSIIndicator, StochasticOscillator
 
 app = Flask(__name__)
@@ -41,35 +41,35 @@ def monitor_signal(pair, action, entry, tp1, tp2, sl):
             if action == "LONG":
                 if not tp1_hit and price >= tp1:
                     tp1_hit = True
-                    send_tele("TP1 HIT!\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nTP1: $"+fmt(tp1)+"\n\nHolding for TP2: $"+fmt(tp2)+"...")
+                    send_tele("🎯 <b>TP1 HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nTP1: $"+fmt(tp1)+"\n\nHolding for TP2: $"+fmt(tp2)+"...")
                 elif tp1_hit and price >= tp2:
                     stats["win"] += 1
-                    send_tele("TP2 HIT! WIN!\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nTP2: $"+fmt(tp2)+"\n\nWin Rate: "+get_winrate())
+                    send_tele("💰 <b>TP2 HIT! WIN!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nTP2: $"+fmt(tp2)+"\n\n\U0001f4ca Win Rate: "+get_winrate())
                     active_signals.pop(pair, None)
                     return
                 elif price <= sl:
                     if tp1_hit:
-                        send_tele("SL HIT after TP1\nPair: "+pair+"\nSignal: LONG\nPartial win\n\nWin Rate: "+get_winrate())
+                        send_tele("\u26a0\ufe0f <b>SL HIT after TP1</b>\nPair: "+pair+"\nSignal: LONG\nPartial win\n\n\U0001f4ca Win Rate: "+get_winrate())
                     else:
                         stats["loss"] += 1
-                        send_tele("SL HIT!\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\nWin Rate: "+get_winrate())
+                        send_tele("\u274c <b>SL HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\n\U0001f4ca Win Rate: "+get_winrate())
                     active_signals.pop(pair, None)
                     return
             else:
                 if not tp1_hit and price <= tp1:
                     tp1_hit = True
-                    send_tele("TP1 HIT!\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nTP1: $"+fmt(tp1)+"\n\nHolding for TP2: $"+fmt(tp2)+"...")
+                    send_tele("🎯 <b>TP1 HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nTP1: $"+fmt(tp1)+"\n\nHolding for TP2: $"+fmt(tp2)+"...")
                 elif tp1_hit and price <= tp2:
                     stats["win"] += 1
-                    send_tele("TP2 HIT! WIN!\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nTP2: $"+fmt(tp2)+"\n\nWin Rate: "+get_winrate())
+                    send_tele("💰 <b>TP2 HIT! WIN!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nTP2: $"+fmt(tp2)+"\n\n\U0001f4ca Win Rate: "+get_winrate())
                     active_signals.pop(pair, None)
                     return
                 elif price >= sl:
                     if tp1_hit:
-                        send_tele("SL HIT after TP1\nPair: "+pair+"\nSignal: SHORT\nPartial win\n\nWin Rate: "+get_winrate())
+                        send_tele("\u26a0\ufe0f <b>SL HIT after TP1</b>\nPair: "+pair+"\nSignal: SHORT\nPartial win\n\n\U0001f4ca Win Rate: "+get_winrate())
                     else:
                         stats["loss"] += 1
-                        send_tele("SL HIT!\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\nWin Rate: "+get_winrate())
+                        send_tele("\u274c <b>SL HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\n\U0001f4ca Win Rate: "+get_winrate())
                     active_signals.pop(pair, None)
                     return
         except:
@@ -123,38 +123,52 @@ def scan():
                     if last.get("dir") != "BUY" or now - last.get("t",0) > 14400:
                         alerted[pair]={"dir":"BUY","t":now}
                         tp1,tp2,sl = calc_tp_sl(price,"LONG")
-                        active_signals[pair] = 'LONG'
-                        stats['signals'] += 1
-                        msg = ("SIGNAL ALERT!\n"
-                               "Pair: "+pair+"\n"
-                               "Signal: LONG\n"
-                               "Entry: $"+fmt(price)+"\n"
-                               "TP1: $"+fmt(tp1)+" (+2%)\n"
-                               "TP2: $"+fmt(tp2)+" (+4%)\n"
-                               "SL: $"+fmt(sl)+" (-1%)\n"
-                               "RSI: "+str(rsi)+" | Stoch: "+str(stoch_val)+"\n"
-                               "Win Rate: "+get_winrate()+"\n"
-                               "TF: 15m | Binance Futures")
+                        active_signals[pair] = "LONG"
+                        stats["signals"] += 1
+                        msg = ("🚨 <b>SIGNAL ALERT!</b>\n"
+                               "━━━━━━━━━━━━━━\n"
+                               "📌 Pair: <b>"+pair+"</b>\n"
+                               "📊 Signal: 🟢 <b>LONG</b>\n"
+                               "━━━━━━━━━━━━━━\n"
+                               "📈 Entry: <b>$"+fmt(price)+"</b>\n"
+                               "🎯 TP1: $"+fmt(tp1)+" (+2%)\n"
+                               "🎯 TP2: $"+fmt(tp2)+" (+4%)\n"
+                               "🛑 SL: $"+fmt(sl)+" (-1%)\n"
+                               "━━━━━━━━━━━━━━\n"
+                               "🔍 <b>Analisis:</b>\n"
+                               "• EMA25 > EMA75 > EMA140 → Uptrend ✅\n"
+                               "• Stochastic oversold crossup ✅\n"
+                               "• RSI: "+str(rsi)+" | Stoch: "+str(stoch_val)+" ✅\n"
+                               "━━━━━━━━━━━━━━\n"
+                               "📊 Win Rate: "+get_winrate()+"\n"
+                               "⏰ TF: 15m | Binance Futures")
                         send_tele(msg)
-                        threading.Thread(target=monitor_signal,args=(pair,'LONG',price,tp1,tp2,sl),daemon=True).start()
+                        threading.Thread(target=monitor_signal,args=(pair,"LONG",price,tp1,tp2,sl),daemon=True).start()
                 elif short_ema and short_stoch and short_rsi:
                     if last.get("dir") != "SELL" or now - last.get("t",0) > 14400:
                         alerted[pair]={"dir":"SELL","t":now}
                         tp1,tp2,sl = calc_tp_sl(price,"SHORT")
-                        active_signals[pair] = 'SHORT'
-                        stats['signals'] += 1
-                        msg = ("SIGNAL ALERT!\n"
-                               "Pair: "+pair+"\n"
-                               "Signal: SHORT\n"
-                               "Entry: $"+fmt(price)+"\n"
-                               "TP1: $"+fmt(tp1)+" (-2%)\n"
-                               "TP2: $"+fmt(tp2)+" (-4%)\n"
-                               "SL: $"+fmt(sl)+" (+1.5%)\n"
-                               "RSI: "+str(rsi)+" | Stoch: "+str(stoch_val)+"\n"
-                               "Win Rate: "+get_winrate()+"\n"
-                               "TF: 15m | Binance Futures")
+                        active_signals[pair] = "SHORT"
+                        stats["signals"] += 1
+                        msg = ("🚨 <b>SIGNAL ALERT!</b>\n"
+                               "━━━━━━━━━━━━━━\n"
+                               "📌 Pair: <b>"+pair+"</b>\n"
+                               "📊 Signal: 🔴 <b>SHORT</b>\n"
+                               "━━━━━━━━━━━━━━\n"
+                               "📉 Entry: <b>$"+fmt(price)+"</b>\n"
+                               "🎯 TP1: $"+fmt(tp1)+" (-2%)\n"
+                               "🎯 TP2: $"+fmt(tp2)+" (-4%)\n"
+                               "🛑 SL: $"+fmt(sl)+" (+1.5%)\n"
+                               "━━━━━━━━━━━━━━\n"
+                               "🔍 <b>Analisis:</b>\n"
+                               "• EMA25 < EMA75 < EMA140 → Downtrend ✅\n"
+                               "• Stochastic overbought crossdown ✅\n"
+                               "• RSI: "+str(rsi)+" | Stoch: "+str(stoch_val)+" ✅\n"
+                               "━━━━━━━━━━━━━━\n"
+                               "📊 Win Rate: "+get_winrate()+"\n"
+                               "⏰ TF: 15m | Binance Futures")
                         send_tele(msg)
-                        threading.Thread(target=monitor_signal,args=(pair,'SHORT',price,tp1,tp2,sl),daemon=True).start()
+                        threading.Thread(target=monitor_signal,args=(pair,"SHORT",price,tp1,tp2,sl),daemon=True).start()
                 else:
                     alerted[pair]={}
             except Exception as e:
