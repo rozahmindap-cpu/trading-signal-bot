@@ -5,3 +5,7 @@ Werkzeug==2.3.7
 ccxt
 pandas
 ta
+matplotlib
+mplfinance
+numpy
+pillow
