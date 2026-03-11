@@ -1,5 +1,5 @@
 from flask import Flask, request
-import requests, os, threading, time, ccxt, pandas as pd, math
+import requests, os, threading, time, ccxt, pandas as pd, math, io
 from ta.trend import EMAIndicator
 from ta.momentum import RSIIndicator, StochasticOscillator
 
@@ -21,14 +21,31 @@ def fmt(price):
     return str(round(price, decimals))
 
 def send_tele(msg):
-    requests.post("https://api.telegram.org/bot"+BOT_TOKEN+"/sendMessage", json={"chat_id":CHAT_ID,"text":msg,"parse_mode":"HTML"})
+    requests.post(
+        "https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage",
+        json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML"},
+        timeout=10
+    )
+
+def send_photo(buf, caption=""):
+    """Kirim chart image ke Telegram"""
+    try:
+        buf.seek(0)
+        requests.post(
+            "https://api.telegram.org/bot" + BOT_TOKEN + "/sendPhoto",
+            data={"chat_id": CHAT_ID, "caption": caption, "parse_mode": "HTML"},
+            files={"photo": ("chart.png", buf, "image/png")},
+            timeout=30
+        )
+    except Exception as e:
+        print(f"Photo send error: {e}")
 
 def get_winrate():
     total = stats["win"] + stats["loss"]
     if total == 0:
         return "N/A (baru mulai)"
     pct = round(stats["win"] / total * 100, 1)
-    return str(pct)+"% ("+str(stats["win"])+"W/"+str(stats["loss"])+"L)"
+    return str(pct) + "% (" + str(stats["win"]) + "W/" + str(stats["loss"]) + "L)"
 
 def monitor_signal(pair, action, entry, tp1, tp2, sl):
     deadline = time.time() + 14400
@@ -41,35 +58,35 @@ def monitor_signal(pair, action, entry, tp1, tp2, sl):
             if action == "LONG":
                 if not tp1_hit and price >= tp1:
                     tp1_hit = True
-                    send_tele("🎯 <b>TP1 HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nTP1: $"+fmt(tp1)+"\n\nHolding for TP2: $"+fmt(tp2)+"...")
+                    send_tele("🎯 <b>TP1 HIT!</b>\nPair: " + pair + "\nSignal: LONG\nEntry: $" + fmt(entry) + "\nTP1: $" + fmt(tp1) + "\n\nHolding for TP2: $" + fmt(tp2) + "...")
                 elif tp1_hit and price >= tp2:
                     stats["win"] += 1
-                    send_tele("💰 <b>TP2 HIT! WIN!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nTP2: $"+fmt(tp2)+"\n\n\U0001f4ca Win Rate: "+get_winrate())
+                    send_tele("🏆 <b>TP2 HIT! WIN!</b>\nPair: " + pair + "\nSignal: LONG\nEntry: $" + fmt(entry) + "\nTP2: $" + fmt(tp2) + "\n\n📊 Win Rate: " + get_winrate())
                     active_signals.pop(pair, None)
                     return
                 elif price <= sl:
                     if tp1_hit:
-                        send_tele("\u26a0\ufe0f <b>SL HIT after TP1</b>\nPair: "+pair+"\nSignal: LONG\nPartial win\n\n\U0001f4ca Win Rate: "+get_winrate())
+                        send_tele("⚠️ <b>SL HIT after TP1</b>\nPair: " + pair + "\nSignal: LONG\nPartial win\n\n📊 Win Rate: " + get_winrate())
                     else:
                         stats["loss"] += 1
-                        send_tele("\u274c <b>SL HIT!</b>\nPair: "+pair+"\nSignal: LONG\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\n\U0001f4ca Win Rate: "+get_winrate())
+                        send_tele("❌ <b>SL HIT!</b>\nPair: " + pair + "\nSignal: LONG\nEntry: $" + fmt(entry) + "\nSL: $" + fmt(sl) + "\n\n📊 Win Rate: " + get_winrate())
                     active_signals.pop(pair, None)
                     return
             else:
                 if not tp1_hit and price <= tp1:
                     tp1_hit = True
-                    send_tele("🎯 <b>TP1 HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nTP1: $"+fmt(tp1)+"\n\nHolding for TP2: $"+fmt(tp2)+"...")
+                    send_tele("🎯 <b>TP1 HIT!</b>\nPair: " + pair + "\nSignal: SHORT\nEntry: $" + fmt(entry) + "\nTP1: $" + fmt(tp1) + "\n\nHolding for TP2: $" + fmt(tp2) + "...")
                 elif tp1_hit and price <= tp2:
                     stats["win"] += 1
-                    send_tele("💰 <b>TP2 HIT! WIN!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nTP2: $"+fmt(tp2)+"\n\n\U0001f4ca Win Rate: "+get_winrate())
+                    send_tele("🏆 <b>TP2 HIT! WIN!</b>\nPair: " + pair + "\nSignal: SHORT\nEntry: $" + fmt(entry) + "\nTP2: $" + fmt(tp2) + "\n\n📊 Win Rate: " + get_winrate())
                     active_signals.pop(pair, None)
                     return
                 elif price >= sl:
                     if tp1_hit:
-                        send_tele("\u26a0\ufe0f <b>SL HIT after TP1</b>\nPair: "+pair+"\nSignal: SHORT\nPartial win\n\n\U0001f4ca Win Rate: "+get_winrate())
+                        send_tele("⚠️ <b>SL HIT after TP1</b>\nPair: " + pair + "\nSignal: SHORT\nPartial win\n\n📊 Win Rate: " + get_winrate())
                     else:
                         stats["loss"] += 1
-                        send_tele("\u274c <b>SL HIT!</b>\nPair: "+pair+"\nSignal: SHORT\nEntry: $"+fmt(entry)+"\nSL: $"+fmt(sl)+"\n\n\U0001f4ca Win Rate: "+get_winrate())
+                        send_tele("❌ <b>SL HIT!</b>\nPair: " + pair + "\nSignal: SHORT\nEntry: $" + fmt(entry) + "\nSL: $" + fmt(sl) + "\n\n📊 Win Rate: " + get_winrate())
                     active_signals.pop(pair, None)
                     return
         except:
@@ -79,119 +96,141 @@ def calc_tp_sl(price, action):
     if action == "LONG":
         tp1 = price * 1.02
         tp2 = price * 1.04
-        sl = price * 0.99
+        sl  = price * 0.99
     else:
         tp1 = price * 0.98
         tp2 = price * 0.96
-        sl = price * 1.015
+        sl  = price * 1.015
     return tp1, tp2, sl
+
+def try_send_chart(df, pair, action, entry, tp1, tp2, sl):
+    """Generate dan kirim chart (non-blocking, silent fail)"""
+    try:
+        from chart_generator import generate_chart_v1
+        buf = generate_chart_v1(df, pair, action, entry, tp1, tp2, sl)
+        if buf:
+            caption = f"📊 <b>{pair}</b> — {'🟢 LONG' if action == 'LONG' else '🔴 SHORT'} | TF: 30m"
+            send_photo(buf, caption)
+    except Exception as e:
+        print(f"Chart skipped: {e}")
 
 def scan():
     global exchange_global
-    exchange_global = ccxt.binance({"options":{"defaultType":"future"}, "enableRateLimit": True})
+    exchange_global = ccxt.binance({"options": {"defaultType": "future"}, "enableRateLimit": True})
     while True:
         for pair in PAIRS:
             if pair in active_signals:
                 continue
             try:
-                ohlcv = exchange_global.fetch_ohlcv(pair,"30m",limit=150)
-                df = pd.DataFrame(ohlcv,columns=["t","o","h","l","c","v"])
-                df["ema25"] = EMAIndicator(df["c"],25).ema_indicator()
-                df["ema75"] = EMAIndicator(df["c"],75).ema_indicator()
-                df["ema140"] = EMAIndicator(df["c"],140).ema_indicator()
-                df["rsi"] = RSIIndicator(df["c"],14).rsi()
-                stoch = StochasticOscillator(df["h"],df["l"],df["c"],window=14,smooth_window=3)
+                ohlcv = exchange_global.fetch_ohlcv(pair, "30m", limit=150)
+                df = pd.DataFrame(ohlcv, columns=["t","o","h","l","c","v"])
+                df["ema25"]   = EMAIndicator(df["c"], 25).ema_indicator()
+                df["ema75"]   = EMAIndicator(df["c"], 75).ema_indicator()
+                df["ema140"]  = EMAIndicator(df["c"], 140).ema_indicator()
+                df["rsi"]     = RSIIndicator(df["c"], 14).rsi()
+                stoch         = StochasticOscillator(df["h"], df["l"], df["c"], window=14, smooth_window=3)
                 df["stoch_k"] = stoch.stoch()
                 df["stoch_d"] = stoch.stoch_signal()
-                r = df.iloc[-1]
-                p = df.iloc[-2]
+                r     = df.iloc[-1]
+                p     = df.iloc[-2]
                 price = r["c"]
-                rsi = round(r["rsi"],1)
-                stoch_val = round(r["stoch_k"],1)
-                now = time.time()
-                last = alerted.get(pair,{})
+                rsi   = round(r["rsi"], 1)
+                stoch_val = round(r["stoch_k"], 1)
+                now  = time.time()
+                last = alerted.get(pair, {})
 
-                long_ema = r["ema25"] > r["ema75"] > r["ema140"]
+                long_ema   = r["ema25"] > r["ema75"] > r["ema140"]
                 long_stoch = r["stoch_k"] < 30 and r["stoch_k"] > r["stoch_d"] and p["stoch_k"] <= p["stoch_d"]
-                long_rsi = 30 < r["rsi"] < 60
+                long_rsi   = 30 < r["rsi"] < 60
 
-                short_ema = r["ema25"] < r["ema75"] < r["ema140"]
+                short_ema   = r["ema25"] < r["ema75"] < r["ema140"]
                 short_stoch = r["stoch_k"] > 70 and r["stoch_k"] < r["stoch_d"] and p["stoch_k"] >= p["stoch_d"]
-                short_rsi = r["rsi"] > 55 and p["rsi"] > r["rsi"]
+                short_rsi   = r["rsi"] > 55 and p["rsi"] > r["rsi"]
 
                 if long_ema and long_stoch and long_rsi:
-                    if last.get("dir") != "BUY" or now - last.get("t",0) > 14400:
-                        alerted[pair]={"dir":"BUY","t":now}
-                        tp1,tp2,sl = calc_tp_sl(price,"LONG")
+                    if last.get("dir") != "BUY" or now - last.get("t", 0) > 14400:
+                        alerted[pair] = {"dir": "BUY", "t": now}
+                        tp1, tp2, sl  = calc_tp_sl(price, "LONG")
                         active_signals[pair] = "LONG"
                         stats["signals"] += 1
-                        msg = ("🚨 <b>SIGNAL ALERT!</b>\n"
-                               "━━━━━━━━━━━━━━\n"
-                               "📌 Pair: <b>"+pair+"</b>\n"
-                               "📊 Signal: 🟢 <b>LONG</b>\n"
-                               "━━━━━━━━━━━━━━\n"
-                               "📈 Entry: <b>$"+fmt(price)+"</b>\n"
-                               "🎯 TP1: $"+fmt(tp1)+" (+2%)\n"
-                               "🎯 TP2: $"+fmt(tp2)+" (+4%)\n"
-                               "🛑 SL: $"+fmt(sl)+" (-1%)\n"
-                               "━━━━━━━━━━━━━━\n"
-                               "🔍 <b>Analisis:</b>\n"
-                               "• EMA25 > EMA75 > EMA140 → Uptrend ✅\n"
-                               "• Stochastic oversold crossup ✅\n"
-                               "• RSI: "+str(rsi)+" | Stoch: "+str(stoch_val)+" ✅\n"
-                               "━━━━━━━━━━━━━━\n"
-                               "📊 Win Rate: "+get_winrate()+"\n"
-                               "⏰ TF: 30m | Binance Futures")
+                        msg = (
+                            "🚨 <b>SIGNAL ALERT!</b>\n"
+                            "━━━━━━━━━━━━━━\n"
+                            "📌 Pair: <b>" + pair + "</b>\n"
+                            "📈 Signal: 🟢 <b>LONG</b>\n"
+                            "━━━━━━━━━━━━━━\n"
+                            "💰 Entry: <b>$" + fmt(price) + "</b>\n"
+                            "🎯 TP1: $" + fmt(tp1) + " (+2%)\n"
+                            "🎯 TP2: $" + fmt(tp2) + " (+4%)\n"
+                            "🛑 SL: $" + fmt(sl) + " (-1%)\n"
+                            "━━━━━━━━━━━━━━\n"
+                            "📊 <b>Analisis:</b>\n"
+                            " EMA25 &gt; EMA75 &gt; EMA140 ✅\n"
+                            " Stochastic oversold crossup ✅\n"
+                            " RSI: " + str(rsi) + " | Stoch: " + str(stoch_val) + " ✅\n"
+                            "━━━━━━━━━━━━━━\n"
+                            "📊 Win Rate: " + get_winrate() + "\n"
+                            "⏱ TF: 30m | Binance Futures"
+                        )
                         send_tele(msg)
-                        threading.Thread(target=monitor_signal,args=(pair,"LONG",price,tp1,tp2,sl),daemon=True).start()
+                        # Kirim chart di thread terpisah
+                        threading.Thread(target=try_send_chart, args=(df.copy(), pair, "LONG", price, tp1, tp2, sl), daemon=True).start()
+                        threading.Thread(target=monitor_signal, args=(pair, "LONG", price, tp1, tp2, sl), daemon=True).start()
+
                 elif short_ema and short_stoch and short_rsi:
-                    if last.get("dir") != "SELL" or now - last.get("t",0) > 14400:
-                        alerted[pair]={"dir":"SELL","t":now}
-                        tp1,tp2,sl = calc_tp_sl(price,"SHORT")
+                    if last.get("dir") != "SELL" or now - last.get("t", 0) > 14400:
+                        alerted[pair] = {"dir": "SELL", "t": now}
+                        tp1, tp2, sl  = calc_tp_sl(price, "SHORT")
                         active_signals[pair] = "SHORT"
                         stats["signals"] += 1
-                        msg = ("🚨 <b>SIGNAL ALERT!</b>\n"
-                               "━━━━━━━━━━━━━━\n"
-                               "📌 Pair: <b>"+pair+"</b>\n"
-                               "📊 Signal: 🔴 <b>SHORT</b>\n"
-                               "━━━━━━━━━━━━━━\n"
-                               "📉 Entry: <b>$"+fmt(price)+"</b>\n"
-                               "🎯 TP1: $"+fmt(tp1)+" (-2%)\n"
-                               "🎯 TP2: $"+fmt(tp2)+" (-4%)\n"
-                               "🛑 SL: $"+fmt(sl)+" (+1.5%)\n"
-                               "━━━━━━━━━━━━━━\n"
-                               "🔍 <b>Analisis:</b>\n"
-                               "• EMA25 < EMA75 < EMA140 → Downtrend ✅\n"
-                               "• Stochastic overbought crossdown ✅\n"
-                               "• RSI: "+str(rsi)+" | Stoch: "+str(stoch_val)+" ✅\n"
-                               "━━━━━━━━━━━━━━\n"
-                               "📊 Win Rate: "+get_winrate()+"\n"
-                               "⏰ TF: 30m | Binance Futures")
+                        msg = (
+                            "🚨 <b>SIGNAL ALERT!</b>\n"
+                            "━━━━━━━━━━━━━━\n"
+                            "📌 Pair: <b>" + pair + "</b>\n"
+                            "📉 Signal: 🔴 <b>SHORT</b>\n"
+                            "━━━━━━━━━━━━━━\n"
+                            "💰 Entry: <b>$" + fmt(price) + "</b>\n"
+                            "🎯 TP1: $" + fmt(tp1) + " (-2%)\n"
+                            "🎯 TP2: $" + fmt(tp2) + " (-4%)\n"
+                            "🛑 SL: $" + fmt(sl) + " (+1.5%)\n"
+                            "━━━━━━━━━━━━━━\n"
+                            "📊 <b>Analisis:</b>\n"
+                            " EMA25 &lt; EMA75 &lt; EMA140 ✅\n"
+                            " Stochastic overbought crossdown ✅\n"
+                            " RSI: " + str(rsi) + " | Stoch: " + str(stoch_val) + " ✅\n"
+                            "━━━━━━━━━━━━━━\n"
+                            "📊 Win Rate: " + get_winrate() + "\n"
+                            "⏱ TF: 30m | Binance Futures"
+                        )
                         send_tele(msg)
-                        threading.Thread(target=monitor_signal,args=(pair,"SHORT",price,tp1,tp2,sl),daemon=True).start()
+                        threading.Thread(target=try_send_chart, args=(df.copy(), pair, "SHORT", price, tp1, tp2, sl), daemon=True).start()
+                        threading.Thread(target=monitor_signal, args=(pair, "SHORT", price, tp1, tp2, sl), daemon=True).start()
                 else:
-                    alerted[pair]={}
+                    alerted[pair] = {}
+
             except Exception as e:
                 print(str(e))
             time.sleep(3)
         time.sleep(900)
 
-threading.Thread(target=scan,daemon=True).start()
+
+threading.Thread(target=scan, daemon=True).start()
+
 
 @app.route("/")
 def home():
-    wr = get_winrate()
+    wr    = get_winrate()
     total = stats["win"] + stats["loss"]
-    return "Bot Running! | Signals: "+str(total)+" | Win Rate: "+wr, 200
+    return "Bot v1 Running! | Signals: " + str(total) + " | Win Rate: " + wr, 200
 
-@app.route("/webhook",methods=["POST"])
+@app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.get_json(force=True)
-    ticker = data.get("ticker","N/A")
-    close = data.get("close","N/A")
-    action = str(data.get("action","")).upper()
-    emoji = "LONG" if action=="BUY" else "SHORT"
-    send_tele("SIGNAL!\nPair: "+ticker+"\nSignal: "+emoji+"\nPrice: "+str(close))
+    data   = request.get_json(force=True)
+    ticker = data.get("ticker", "N/A")
+    close  = data.get("close", "N/A")
+    action = str(data.get("action", "")).upper()
+    emoji  = "LONG" if action == "BUY" else "SHORT"
+    send_tele("SIGNAL!\nPair: " + ticker + "\nSignal: " + emoji + "\nPrice: " + str(close))
     return "OK", 200
 
 if __name__ == "__main__":
