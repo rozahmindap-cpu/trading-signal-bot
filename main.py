@@ -88,7 +88,7 @@ def calc_tp_sl(price, action):
 
 def scan():
     global exchange_global
-    exchange_global = ccxt.binance({"options":{"defaultType":"future"}})
+    exchange_global = ccxt.binance({"options":{"defaultType":"future"}, "enableRateLimit": True})
     while True:
         for pair in PAIRS:
             if pair in active_signals:
@@ -173,7 +173,8 @@ def scan():
                     alerted[pair]={}
             except Exception as e:
                 print(str(e))
-        time.sleep(60)
+            time.sleep(3)
+        time.sleep(900)
 
 threading.Thread(target=scan,daemon=True).start()
 
